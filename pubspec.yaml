@@ -36,7 +36,6 @@ dependencies:
   path: ^1.8.3
   shared_preferences: ^2.2.2  # 新增：用于持久化存储配置
   sqflite: ^2.3.0
-
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8

@@ -1,6 +1,5 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import 'dart:io'; // 引入 IO
 
 class DbHelper {
   static Database? _db;
@@ -26,23 +25,15 @@ class DbHelper {
           db.execute('ALTER TABLE uploaded_assets ADD COLUMN thumbnail_path TEXT');
         }
         if (oldVersion < 3) {
-          try {
-            db.execute('ALTER TABLE uploaded_assets ADD COLUMN create_time INTEGER');
-          } catch (_) {}
-          try {
-            db.execute('ALTER TABLE uploaded_assets ADD COLUMN filename TEXT');
-          } catch (_) {}
+          try { db.execute('ALTER TABLE uploaded_assets ADD COLUMN create_time INTEGER'); } catch (_) {}
+          try { db.execute('ALTER TABLE uploaded_assets ADD COLUMN filename TEXT'); } catch (_) {}
         }
       },
     );
   }
 
-  // 【新增】获取数据库文件路径 (用于备份)
-  static Future<String> getDbPath() async {
-    return join(await getDatabasesPath(), 'backup_records.db');
-  }
+  static Future<String> getDbPath() async => join(await getDatabasesPath(), 'backup_records.db');
 
-  // 【新增】关闭数据库 (用于恢复覆盖前释放锁)
   static Future<void> close() async {
     if (_db != null) {
       await _db!.close();
@@ -68,12 +59,5 @@ class DbHelper {
     final database = await db;
     final List<Map<String, dynamic>> maps = await database.query('uploaded_assets', where: 'asset_id = ?', whereArgs: [id]);
     return maps.isNotEmpty;
-  }
-  
-  static Future<String?> getThumbPath(String id) async {
-    final database = await db;
-    final List<Map<String, dynamic>> maps = await database.query('uploaded_assets', where: 'asset_id = ?', whereArgs: [id]);
-    if (maps.isNotEmpty) return maps.first['thumbnail_path'] as String?;
-    return null;
   }
 }
