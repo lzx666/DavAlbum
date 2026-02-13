@@ -32,7 +32,7 @@ class WebDavService {
     }
   }
 
-  // 👇👇👇 重点是下面这个方法，一定要有！ 👇👇👇
+  // --- 核心修复：添加获取云端文件列表的方法 ---
   Future<List<String>> listRemoteFiles(String folderPath) async {
     try {
       String path = folderPath.endsWith('/') ? folderPath : '$folderPath/';
@@ -46,6 +46,7 @@ class WebDavService {
 
       if (response.statusCode == 207) {
         final String xml = response.data.toString();
+        // 使用正则提取文件名
         final RegExp hrefReg = RegExp(r'<d:href[^>]*>([^<]+)<\/d:href>', caseSensitive: false);
         final matches = hrefReg.allMatches(xml);
         
@@ -55,10 +56,11 @@ class WebDavService {
           String decodedPath = Uri.decodeFull(rawPath);
           String name = decodedPath.split('/').last;
           
+          // 过滤逻辑：排除当前目录、隐藏文件，只保留图片
           if (name.isNotEmpty && 
               name != path.split('/').last && 
               !name.startsWith('.') &&
-              (name.toLowerCase().endsWith('.jpg') || name.toLowerCase().endsWith('.png') || name.toLowerCase().endsWith('.jpeg'))) {
+              (name.toLowerCase().endsWith('.jpg') || name.toLowerCase().endsWith('.png') || name.toLowerCase().endsWith('.jpeg') || name.toLowerCase().endsWith('.heic'))) {
              files.add(name);
           }
         }
@@ -70,7 +72,6 @@ class WebDavService {
       return [];
     }
   }
-  // 👆👆👆 重点结束 👆👆👆
 
   Future<void> upload(File file, String remotePath) async {
     int len = await file.length();
@@ -78,6 +79,7 @@ class WebDavService {
   }
 
   Future<void> uploadBytes(Uint8List bytes, String remotePath) async {
+    // 优化：直接传输 bytes 提高效率
     await _dio.put(remotePath, data: Stream.value(bytes), options: Options(headers: {Headers.contentLengthHeader: bytes.length}));
   }
 
