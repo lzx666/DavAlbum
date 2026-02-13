@@ -91,7 +91,7 @@ class _SuperBackupPageState extends State<SuperBackupPage> {
     } catch (_) {}
   }
 
-  Future<void> _refreshGallery() async {
+Future<void> _refreshGallery() async {
     // 1. 获取本地
     final albums = await PhotoManager.getAssetPathList(type: RequestType.image);
     List<AssetEntity> localAssets = albums.isNotEmpty ? await albums.first.getAssetListPaged(page: 0, size: 5000) : [];
@@ -102,14 +102,14 @@ class _SuperBackupPageState extends State<SuperBackupPage> {
     
     Map<String, PhotoItem> mergedMap = {};
 
-    // A. 处理数据库记录
+    // A. 处理数据库记录（包含本地已删云端还在的）
     for (var row in dbRecords) {
       String id = row['asset_id'];
       AssetEntity? localAsset = localAssetMap[id];
       
       mergedMap[id] = PhotoItem(
         id: id,
-        asset: localAsset, 
+        asset: localAsset, // 如果本地已删，这里是 null
         localThumbPath: row['thumbnail_path'], 
         remoteFileName: row['filename'], 
         createTime: row['create_time'] ?? 0, 
@@ -117,7 +117,7 @@ class _SuperBackupPageState extends State<SuperBackupPage> {
       );
     }
 
-    // B. 处理本地新增
+    // B. 处理本地新增未备份的
     for (var asset in localAssets) {
       if (!mergedMap.containsKey(asset.id)) {
         mergedMap[asset.id] = PhotoItem(
@@ -129,13 +129,35 @@ class _SuperBackupPageState extends State<SuperBackupPage> {
       }
     }
 
+    // C. 排序并分组（核心修改点）
     var list = mergedMap.values.toList()..sort((a, b) => b.createTime.compareTo(a.createTime));
+    
     Map<String, List<PhotoItem>> groups = {};
+    
+    // 获取当前时间，用于判断“今天”和“昨天”
+    DateTime now = DateTime.now();
+    DateTime today = DateTime(now.year, now.month, now.day);
+    DateTime yesterday = today.subtract(const Duration(days: 1));
+
     for (var item in list) {
       DateTime date = DateTime.fromMillisecondsSinceEpoch(item.createTime);
-      String key = "${date.year}年${date.month}月"; 
+      // 去掉时分秒，只保留日期部分进行比较
+      DateTime itemDay = DateTime(date.year, date.month, date.day);
+
+      String key;
+      if (itemDay == today) {
+        key = "今天";
+      } else if (itemDay == yesterday) {
+        key = "昨天";
+      } else {
+        key = "${date.year}年${date.month}月${date.day}日";
+      }
+      
+      // 只有当 list 里有 item 时，才会执行到这里
+      // 所以如果某天没有照片，这里永远不会 putIfAbsent，UI 也就不显示
       groups.putIfAbsent(key, () => []).add(item);
     }
+    
     if (mounted) setState(() => _groupedItems = groups);
   }
 
