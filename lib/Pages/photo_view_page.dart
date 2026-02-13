@@ -34,7 +34,11 @@ class _PhotoViewerState extends State<PhotoViewer> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, iconTheme: const IconThemeData(color: Colors.white)),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent, 
+        elevation: 0, 
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
       body: PageView.builder(
         controller: _pageController,
         itemCount: widget.galleryItems.length,
@@ -45,30 +49,63 @@ class _PhotoViewerState extends State<PhotoViewer> {
 
   Widget _buildSinglePage(PhotoItem item) {
     return Center(
-      child: FutureBuilder<File>(
+      child: FutureBuilder<File?>(
         future: _getBestImage(item),
         builder: (context, snap) {
-          if (snap.hasData) return InteractiveViewer(child: Image.file(snap.data!, fit: BoxFit.contain));
-          if (snap.hasError) return const Icon(Icons.broken_image, color: Colors.white54, size: 50);
-          return const CircularProgressIndicator(color: Colors.white);
+          if (snap.connectionState == ConnectionState.waiting) {
+             return Column(
+               mainAxisAlignment: MainAxisAlignment.center,
+               children: const [
+                 CircularProgressIndicator(color: Colors.white),
+                 SizedBox(height: 10),
+                 Text("正在下载原图...", style: TextStyle(color: Colors.white70))
+               ],
+             );
+          }
+          if (snap.hasData && snap.data != null) {
+            return InteractiveViewer(child: Image.file(snap.data!, fit: BoxFit.contain));
+          }
+          return const Column(
+             mainAxisAlignment: MainAxisAlignment.center,
+             children: [
+                Icon(Icons.broken_image, color: Colors.white54, size: 50),
+                Text("加载失败", style: TextStyle(color: Colors.white54))
+             ],
+          );
         },
       ),
     );
   }
 
-  Future<File> _getBestImage(PhotoItem item) async {
+  Future<File?> _getBestImage(PhotoItem item) async {
+    // 1. 如果本地相册里有，直接返回 (Asset)
     if (item.asset != null) {
       final file = await item.asset!.file;
       if (file != null && file.existsSync()) return file;
     }
+
+    // 2. 如果是本地已删（只有数据库记录），或者 asset.file 拿不到
+    // 检查本地缓存
     final appDir = await getTemporaryDirectory();
-    final localPath = '${appDir.path}/temp_${item.id}.jpg';
+    // 使用 remoteFileName 或者 id 来做缓存文件名
+    String fileName = item.remoteFileName ?? "${item.id}.jpg";
+    if (!fileName.contains('.')) fileName += ".jpg";
+    
+    final localPath = '${appDir.path}/temp_full_$fileName';
     final file = File(localPath);
-    if (!file.existsSync() || file.lengthSync() == 0) {
-      String fileName = item.remoteFileName ?? "${item.id}.jpg";
-      if (!fileName.contains('.')) fileName += ".jpg";
-      await widget.service.downloadFile("MyPhotos/$fileName", localPath);
+
+    // 3. 如果本地缓存有，直接用
+    if (file.existsSync() && file.lengthSync() > 0) {
+      return file;
     }
-    return file;
+
+    // 4. 本地完全没有，开始下载
+    try {
+      await widget.service.downloadFile("MyPhotos/$fileName", localPath);
+      return file;
+    } catch (e) {
+      print("Download error: $e");
+      return null;
+    }
   }
 }
